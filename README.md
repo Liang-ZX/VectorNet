@@ -1,12 +1,10 @@
 ## VectorNet Re-implementation
 
-Author: 梁志烜  浙江大学
-
 1. 运行环境
 
    python 3.7, Pytorch1.1.0, torchvision0.3.0, cuda9.0 
 
-2. 提交文件
+2. 文件说明
 
    ----- VectorNet
 
