@@ -1,4 +1,4 @@
-## VectorNet Re-implementation
+# VectorNet Re-implementation
 
 This is the unofficial **pytorch** implementation of CVPR2020 paper *"VectorNet: Encoding HD Maps and Agent Dynamics from Vectorized Representation"*. (And it's a part of test of the summer camp 2020 organized by IIIS, Tsinghua University.)
 
