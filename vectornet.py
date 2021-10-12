@@ -34,9 +34,10 @@ class VectorNet(nn.Module):
         PITmap_list = vectormap_batch['PIT']
         MIAmap_list = vectormap_batch['MIA']
         city_name_list = vectormap_batch['city_name']
-        batch_size = trajectory_batch.size()[0]
+        batch_size = trajectory_batch.size()[0]   # trajectory_batch.size() -> torch.Size([2, 49, 6]), [batch_size, trajectory_vector_size, feature_size]
 
-        label = trajectory_batch[:, self.cfg['last_observe']:, 2:4]
+        label = trajectory_batch[:, self.cfg['last_observe']:, 2:4] # label.size() -> torch.Size([2, 19, 2]), last 19 trajectory_vector, [x1, y1]
+
         predict_list = []
         for i in range(batch_size):
             polyline_list = []

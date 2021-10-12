@@ -25,7 +25,7 @@ class GraphAttentionNet(nn.Module):
         p_query = F.relu(self.queryFC(polyline_feature))
         p_key = F.relu(self.keyFC(polyline_feature))
         p_value = F.relu(self.valueFC(polyline_feature))
-        query_result = p_query.mm(p_key.t())
+        query_result = p_query.mm(p_key.t())    # 矩阵乘
         query_result = query_result / (p_key.shape[1] ** 0.5)
         attention = F.softmax(query_result, dim=1)
         output = attention.mm(p_value)

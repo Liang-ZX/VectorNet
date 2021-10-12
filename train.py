@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +11,7 @@ from vectornet import VectorNet
 import logging
 import warnings
 warnings.filterwarnings('ignore')
-
+import time 
 
 def main():
     USE_GPU = True
@@ -28,9 +29,14 @@ def main():
     learning_rate = 1e-3
     learning_rate_decay = 0.3
     cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay,
-               last_observe=30, epochs=25, print_every=2, save_every=2, batch_size=2,
-               data_locate="./data/forecasting_dataset/train/", save_path="./model_ckpt/",
+               last_observe=30, epochs=1, print_every=10, save_every=2, batch_size=2,
+               data_locate="/home/tangx2/storage/projects/git/argoverse-api/train/data_5000", save_path="./model_ckpt/", # /workspace/argoverse-api/train/data 
                log_file="./log.txt", tensorboard_path="runs/train_visualization")
+
+    print('config :')
+    print(cfg)
+    # print(torch.cuda.is_available())
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     if not os.path.isdir(cfg['save_path']):
         os.mkdir(cfg['save_path'])
@@ -51,7 +57,6 @@ def main():
     logger.info("Start Training...")
     do_train(model, cfg, train_loader, optimizer, scheduler=None, writer=writer, logger=logger)
 
-
 def do_train(model, cfg, train_loader, optimizer, scheduler, writer, logger):
     device = cfg['device']
     print_every = cfg['print_every']
@@ -67,8 +72,9 @@ def do_train(model, cfg, train_loader, optimizer, scheduler, writer, logger):
             optimizer.step()
 
             if i % print_every == 0:
-                logger.info('Epoch %d/25: Iteration %d, loss = %.4f' % (e+1, i, loss.item()))
+                logger.info('Epoch %d/%d: Iteration %d, loss = %.4f' % (e+1, cfg['epochs'], i, loss.item()))
                 writer.add_scalar('training_loss', loss.item(), e)
+            break
         # scheduler.step()
         if (e+1) % cfg['save_every'] == 0:
             file_path = cfg['save_path'] + "model_epoch" + str(e+1) + ".pth"
