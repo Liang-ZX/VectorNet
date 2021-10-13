@@ -12,7 +12,10 @@ from argoverse.data_loading.argoverse_tracking_loader import ArgoverseTrackingLo
 from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import datetime
+from common import *
+import json
+import pickle
+import sys
 
 ## 根据轨迹点p0(x0,y0), p1(x1,y1)计算它们组成的向量的2x2旋转矩阵
 def get_rotate_matrix(trajectory):
@@ -51,12 +54,12 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):   # 迭代获取数据函数，在该函数中读取了trajectory数据，同时对坐标进行了一系列预处理，最后转换为归一化的轨迹和地图tensor
         # self.am.find_local_lane_polygons()
-        self.trajectory, city_name, extra_fields = self.get_trajectory(index)   # 获取一段轨迹，见图2021-10-11 21-36-01 的屏幕截图.png
-        traj_id = extra_fields['trajectory_id'][0]  # 将xxx.csv中文件名作为id，数据见data.txt，由于是同一段轨迹，所以id是一样的，所以我们取第0个
+        self.trajectory, city_name, extra_fields = self.get_trajectory(index)   # 由索引获取一段轨迹，见图2021-10-11 21-36-01 的屏幕截图.png
+        traj_id = extra_fields['trajectory_id'][0]  # 将xxx.csv中文件名作为scenario id，数据见data.txt，由于是同一段轨迹，所以id是一样的，所以我们取第0个
         self.city_name.update({str(traj_id): city_name})
-        center_xy = self.trajectory[self.last_observe-1][1]
+        center_xy = self.trajectory[self.last_observe-1][1] # 将第last_observe-1个轨迹点作为中心点
         self.center_xy.update({str(traj_id): center_xy})    # 选取一个中心点，用于归一化处理,数据见data.txt, {'425': array([ 186.48895452, 1560.94612336])}
-        trajectory_feature = (self.trajectory - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 4) # [[x1,y1,x2,y2],[x4,y4,x4,y4],...]
+        trajectory_feature = (self.trajectory - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 4) # [[x1,y1,x2,y2],[x3,y3,x4,y4],...]
         rotate_matrix = get_rotate_matrix(trajectory_feature[self.last_observe, :])   # get rotate coordinate from first 2 points
         self.rotate_matrix.update({str(traj_id): rotate_matrix})
         trajectory_feature = ((trajectory_feature.reshape(-1, 2)).dot(rotate_matrix.T)).reshape(-1, 4) # 轨迹特征旋转并reshape
@@ -68,10 +71,10 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
                                                         extra_fields['trajectory_id'].reshape(-1, 1)))).float()
         map_feature_dict = dict(PIT=[], MIA=[])
         # 地图特征为8维[v0x,v0y,v1x,v1y,turn_direction,in_intersection,has_traffic_control,lane_id]
+        # 上面得到了self.center_xy和self.rotate_matrix，下面对每个点地图也需要做相应的去中心化和旋转
         for city in ['PIT', 'MIA']:
             for i in range(len(self.vector_map[city])):
-                map_feature = (self.vector_map[city][i] -
-                               np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 2) # 地图点减去中心点作为map_feature
+                map_feature = (self.vector_map[city][i] - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 2) # 地图点减去中心点作为map_feature
                 map_feature = (map_feature.dot(rotate_matrix.T)).reshape(-1, 4) # 地图特征旋转并reshape
                 map_feature = self.normalize_coordinate(map_feature, city)
                 tmp_tensor = torch.from_numpy(np.hstack((map_feature,
@@ -152,7 +155,7 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
 
         for city_name in ['PIT', 'MIA']:
             for key in self.laneid_map[city_name]: # lane id
-                # 由lane id 和 city_name 返回的pts是由21个点组成的一个闭合车道（第一个点和最后一个点重合），坐标点是三维的(x,y,z)
+                # 由lane_id (key) 和 city_name 返回的pts是由21个三维坐标点(x,y,z)组成的一个闭合车道（第一个点和最后一个点重合）
                 pts = self.am.get_lane_segment_polygon(key, city_name)  # get lane boundries sample points, stitch them as vector (specified in the paper)
                 turn_str = self.am.get_lane_turn_direction(key, city_name)
                 if turn_str == 'LEFT':
@@ -164,17 +167,18 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
                 pts_len = pts.shape[0] // 2                     # 21 // 2 返回10
                 positive_pts = pts[:pts_len, :2]                # 车道左边界(x,y)坐标
                 negative_pts = pts[pts_len:2 * pts_len, :2]     # 右边界
-                polyline.clear()
                 # if city_name == 'PIT':
                 #     plt.plot(pts[:pts_len, 0], pts[:pts_len, 1])
                 #     plt.plot(pts[pts_len:2 * pts_len, 0], pts[pts_len:2 * pts_len, 1])
+                polyline.clear()
                 for i in range(pts_len - 1):
-                    v1 = np.array([positive_pts[i], positive_pts[i + 1]])   # 车道左边界向量
+                    v1 = np.array([positive_pts[i], positive_pts[i + 1]])   # 车道左边界向量，二维向量只用xy坐标
                     v2 = np.array([negative_pts[pts_len - 1 - i], negative_pts[pts_len - i - 2]])   # 右边界向量
                     polyline.append(v1)
                     polyline.append(v2)
                     # extra_field['table_index'] = self.laneid_map[city_name][key]
                 repeat_t = 2*(pts_len-1)
+                # 最后得到的polyline是18维的，每一维是用两个点表示的向量，转成np.array再加到vector_map
                 vector_map[city_name].append(np.array(polyline).copy())
                 extra_map[city_name]['turn_direction'].append(np.repeat(turn, repeat_t, axis=0).reshape(-1, 1))
                 extra_map[city_name]['OBJECT_TYPE'].append(np.repeat(-1, repeat_t, axis=0).reshape(-1, 1)) #HD Map
@@ -189,6 +193,9 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
                 pbar.update(1)
         pbar.close()
         # plt.show()
+        # mylog = open('extra_map.txt', mode = 'a',encoding='utf-8')
+        # print(extra_map, file=mylog)
+
         print("Generate Vector Map Successfully!")
         return vector_map, extra_map #vector_map:list
 

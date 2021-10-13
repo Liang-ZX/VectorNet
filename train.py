@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,7 +11,8 @@ from vectornet import VectorNet
 import logging
 import warnings
 warnings.filterwarnings('ignore')
-import time 
+from common import *
+import pprint
 
 def main():
     USE_GPU = True
@@ -33,9 +34,9 @@ def main():
                data_locate="/home/tangx2/storage/projects/git/argoverse-api/train/data_5000", save_path="./model_ckpt/", # /workspace/argoverse-api/train/data 
                log_file="./log.txt", tensorboard_path="runs/train_visualization")
 
-    print('config :')
-    print(cfg)
-    # print(torch.cuda.is_available())
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(cfg)
+    print()
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     if not os.path.isdir(cfg['save_path']):
@@ -48,6 +49,7 @@ def main():
 
     model = VectorNet(traj_features=6, map_features=8, cfg=cfg)
     model.to(device)
+    model.train() # Sets the module in training mode.
     if RUN_PARALLEL:
         model = nn.DataParallel(model, device_ids=device_ids)
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -62,14 +64,13 @@ def do_train(model, cfg, train_loader, optimizer, scheduler, writer, logger):
     print_every = cfg['print_every']
     for e in range(cfg['epochs']):
         for i, (traj_batch, map_batch) in enumerate(train_loader):
-            model.train()
             traj_batch = traj_batch.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
-            loss = model(traj_batch, map_batch).sum()
+            loss = model(traj_batch, map_batch).sum()   # 调用VectorNet.forward()函数
             # save loss
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad()   # 先将梯度归零
+            loss.backward()         # 反向传播计算得到每个参数的梯度值
+            optimizer.step()        # 通过梯度下降执行一步参数更新
 
             if i % print_every == 0:
                 logger.info('Epoch %d/%d: Iteration %d, loss = %.4f' % (e+1, cfg['epochs'], i, loss.item()))

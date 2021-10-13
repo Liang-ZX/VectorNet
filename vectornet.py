@@ -28,9 +28,12 @@ class VectorNet(nn.Module):
         self.fc2 = nn.Linear(64, prediction_step)
         nn.init.kaiming_normal_(self.fc2.weight)
 
-        self.loss_fn = nn.MSELoss(size_average=False, reduce=True) # MSEloss 就是 Gaussian NLL
+        self.loss_fn = nn.MSELoss(size_average=False, reduce=True) # MSEloss 就是 Gaussian NLL，均方损失函数，reduce为True则loss返回标量（各元素均方差之和），size_average=False不求均值
 
     def _forward_train(self, trajectory_batch, vectormap_batch):
+        ''' 分别把前3秒traj和vectormap放入traj_subgraphnet和map_subgraphnet，得到的结果放入polyline_list（后2秒traj作为label）
+            对polyline_list再做normalize得到polyline_feature放入graphnet
+            再经过relu和fc2得到后2秒的traj与label计算loss并返回'''
         PITmap_list = vectormap_batch['PIT']
         MIAmap_list = vectormap_batch['MIA']
         city_name_list = vectormap_batch['city_name']
@@ -46,10 +49,10 @@ class VectorNet(nn.Module):
             else:
                 vectormap_list = MIAmap_list[i]
 
-            polyline_list.append(self.traj_subgraphnet(trajectory_batch[i, :self.cfg['last_observe']]).unsqueeze(0))
+            polyline_list.append(self.traj_subgraphnet(trajectory_batch[i, :self.cfg['last_observe']]).unsqueeze(0)) # 将轨迹前last_observe个点数据(30,6)放入traj_subgraphnet
             for vec_map in vectormap_list:
                 vec_map = vec_map.to(device=self.cfg['device'], dtype=torch.float)
-                map_feature = self.map_subgraphnet(vec_map)
+                map_feature = self.map_subgraphnet(vec_map)  # vector map 放入 map_subgraphnet
                 polyline_list.append(map_feature.unsqueeze(0))
             polyline_feature = F.normalize(torch.cat(polyline_list, dim=0), p=2, dim=1)  # L2 Normalize
             out = self.graphnet(polyline_feature)
@@ -82,7 +85,7 @@ class VectorNet(nn.Module):
         return result, label
 
     def forward(self, trajectory, vectormap):
-        if self.training:
+        if self.training: # 继承自nn.Module
             return self._forward_train(trajectory, vectormap)
         else:
             return self._forward_test(trajectory)
