@@ -9,7 +9,7 @@ from vectornet import VectorNet
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
-
+import pprint
 
 def main():
     USE_GPU = True
@@ -18,12 +18,13 @@ def main():
     else:
         device = torch.device('cpu')
 
-    cfg = dict(device=device, last_observe=20, batch_size=2, predict_step=5,
-               data_locate="/home/tangx2/storage/projects/git/argoverse-api/test_obs/data", save_path="./model_ckpt/inference/",
-               model_path="./model_ckpt/model_final.pth")
+    cfg = dict(device=device, last_observe=20, batch_size=1, predict_step=5,
+               data_locate="/home/tangx2/storage/projects/git/argoverse-api/test_obs/data", save_path="./model_ckpt2/inference/",
+               model_path="./model_ckpt2/model_final.pth")
 
-    print('config :')
-    print(cfg)
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(cfg)
+    print()
 
     if not os.path.isdir(cfg['save_path']):
         os.mkdir(cfg['save_path'])

@@ -46,7 +46,7 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
         self.root_dir = cfg['data_locate']
         self.device = cfg['device']
         self.afl = ArgoverseForecastingLoader(self.root_dir)
-        self.map_feature = dict(PIT=[], MIA=[])
+        # self.map_feature = dict(PIT=[], MIA=[])
         self.city_name, self.center_xy, self.rotate_matrix = dict(), dict(), dict()
 
     def __len__(self):
@@ -55,13 +55,13 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):   # 迭代获取数据函数，在该函数中读取了trajectory数据，同时对坐标进行了一系列预处理，最后转换为归一化的轨迹和地图tensor
         # self.am.find_local_lane_polygons()
         self.trajectory, city_name, extra_fields = self.get_trajectory(index)   # 由索引获取一段轨迹，见图2021-10-11 21-36-01 的屏幕截图.png
-        traj_id = extra_fields['trajectory_id'][0]  # 将xxx.csv中文件名作为scenario id，数据见data.txt，由于是同一段轨迹，所以id是一样的，所以我们取第0个
-        self.city_name.update({str(traj_id): city_name})
+        # traj_id = extra_fields['trajectory_id'][0]  # 将xxx.csv中文件名作为scenario id，数据见data.txt，由于是同一段轨迹，所以id是一样的，所以我们取第0个
+        # self.city_name.update({str(traj_id): city_name})
         center_xy = self.trajectory[self.last_observe-1][1] # 将第last_observe-1个轨迹点作为中心点
-        self.center_xy.update({str(traj_id): center_xy})    # 选取一个中心点，用于归一化处理,数据见data.txt, {'425': array([ 186.48895452, 1560.94612336])}
+        # self.center_xy.update({str(traj_id): center_xy})    # 选取一个中心点，用于归一化处理,数据见data.txt, {'425': array([ 186.48895452, 1560.94612336])}
         trajectory_feature = (self.trajectory - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 4) # [[x1,y1,x2,y2],[x3,y3,x4,y4],...]
         rotate_matrix = get_rotate_matrix(trajectory_feature[self.last_observe, :])   # get rotate coordinate from first 2 points
-        self.rotate_matrix.update({str(traj_id): rotate_matrix})
+        # self.rotate_matrix.update({str(traj_id): rotate_matrix})
         trajectory_feature = ((trajectory_feature.reshape(-1, 2)).dot(rotate_matrix.T)).reshape(-1, 4) # 轨迹特征旋转并reshape
         trajectory_feature = self.normalize_coordinate(trajectory_feature, city_name)  # normalize to [-1, 1]
          # 轨迹特征为6维[x1,y1,x2,y2,TIMESTAMP,trajectory_id]
@@ -69,25 +69,40 @@ class ArgoverseForecastDataset(torch.utils.data.Dataset):
                                                         extra_fields['TIMESTAMP'].reshape(-1, 1),
                                                         # extra_fields['OBJECT_TYPE'].reshape(-1, 1),
                                                         extra_fields['trajectory_id'].reshape(-1, 1)))).float()
-        map_feature_dict = dict(PIT=[], MIA=[])
+        # map_feature_dict = dict(PIT=[], MIA=[])
         # 地图特征为8维[v0x,v0y,v1x,v1y,turn_direction,in_intersection,has_traffic_control,lane_id]
         # 上面得到了self.center_xy和self.rotate_matrix，下面对每个点地图也需要做相应的去中心化和旋转
-        for city in ['PIT', 'MIA']:
-            for i in range(len(self.vector_map[city])):
-                map_feature = (self.vector_map[city][i] - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 2) # 地图点减去中心点作为map_feature
-                map_feature = (map_feature.dot(rotate_matrix.T)).reshape(-1, 4) # 地图特征旋转并reshape
-                map_feature = self.normalize_coordinate(map_feature, city)
-                tmp_tensor = torch.from_numpy(np.hstack((map_feature,
-                                                         self.extra_map[city]['turn_direction'][i],
-                                                         self.extra_map[city]['in_intersection'][i],
-                                                         self.extra_map[city]['has_traffic_control'][i],
-                                                         # self.extra_map[city]['OBJECT_TYPE'][i],
-                                                         self.extra_map[city]['lane_id'][i])))
-                map_feature_dict[city].append(tmp_tensor.float())
-                # self.map_feature[city] = np.array(self.map_feature[city])
-            self.map_feature[city] = map_feature_dict[city]
-        self.map_feature['city_name'] = city_name
-        return self.traj_feature, self.map_feature
+        self.map_feature = []
+        lane_ids = self.am.get_lane_ids_in_xy_bbox(center_xy[0], center_xy[1], city_name, 20)
+        for id in lane_ids:
+            index_str = self.laneid_map[city_name][id]
+            i = int(index_str)
+            vecmap_feature = (self.vector_map[city_name][i] - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 2) # 地图点去中心点
+            vecmap_feature = (vecmap_feature.dot(rotate_matrix.T)).reshape(-1, 4) # 旋转并reshape
+            vecmap_feature = self.normalize_coordinate(vecmap_feature, city_name) # 再归一化
+            tmp_tensor = torch.from_numpy(np.hstack((vecmap_feature,
+                                                     self.extra_map[city_name]['turn_direction'][i],
+                                                     self.extra_map[city_name]['in_intersection'][i],
+                                                     self.extra_map[city_name]['has_traffic_control'][i],
+                                                     # self.extra_map[city_name]['OBJECT_TYPE'][i],
+                                                     self.extra_map[city_name]['lane_id'][i])))
+            self.map_feature.append(tmp_tensor)
+        # for city in ['PIT', 'MIA']:
+        #     for i in range(len(self.vector_map[city])):
+        #         map_feature = (self.vector_map[city][i] - np.array(center_xy).reshape(1, 1, 2)).reshape(-1, 2) # 地图点减去中心点作为map_feature
+        #         map_feature = (map_feature.dot(rotate_matrix.T)).reshape(-1, 4) # 地图特征旋转并reshape
+        #         map_feature = self.normalize_coordinate(map_feature, city)
+        #         tmp_tensor = torch.from_numpy(np.hstack((map_feature,
+        #                                                  self.extra_map[city]['turn_direction'][i],
+        #                                                  self.extra_map[city]['in_intersection'][i],
+        #                                                  self.extra_map[city]['has_traffic_control'][i],
+        #                                                  # self.extra_map[city]['OBJECT_TYPE'][i],
+        #                                                  self.extra_map[city]['lane_id'][i])))
+        #         map_feature_dict[city].append(tmp_tensor.float())
+        #         # self.map_feature[city] = np.array(self.map_feature[city])
+        #     self.map_feature[city] = map_feature_dict[city]
+        # self.map_feature['city_name'] = city_name
+        return self.traj_feature, self.map_feature  # 返回的是一条5s轨迹向量(49,6)和中心点周围的n个地图向量(n,18,8)
 
     def get_trajectory(self, index):
         seq_path = self.afl.seq_list[index]

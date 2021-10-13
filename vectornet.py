@@ -34,26 +34,36 @@ class VectorNet(nn.Module):
         ''' 分别把前3秒traj和vectormap放入traj_subgraphnet和map_subgraphnet，得到的结果放入polyline_list（后2秒traj作为label）
             对polyline_list再做normalize得到polyline_feature放入graphnet
             再经过relu和fc2得到后2秒的traj与label计算loss并返回'''
-        PITmap_list = vectormap_batch['PIT']
-        MIAmap_list = vectormap_batch['MIA']
-        city_name_list = vectormap_batch['city_name']
-        batch_size = trajectory_batch.size()[0]   # trajectory_batch.size() -> torch.Size([2, 49, 6]), [batch_size, trajectory_vector_size, feature_size]
+        # PITmap_list = vectormap_batch['PIT']
+        # MIAmap_list = vectormap_batch['MIA']
+        # city_name_list = vectormap_batch['city_name']
 
+        # vectormap_batch.size() -> torch.Size([2, n, 18, 8])
+        # trajectory_batch.size() -> torch.Size([2, 49, 6]), [batch_size, trajectory_vector_size, feature_size]
+        batch_size = trajectory_batch.size()[0]   
+                                                  
         label = trajectory_batch[:, self.cfg['last_observe']:, 2:4] # label.size() -> torch.Size([2, 19, 2]), last 19 trajectory_vector, [x1, y1]
 
         predict_list = []
         for i in range(batch_size):
             polyline_list = []
-            if city_name_list[i] == 'PIT':
-                vectormap_list = PITmap_list[i]
-            else:
-                vectormap_list = MIAmap_list[i]
+            # if city_name_list[i] == 'PIT':
+            #     vectormap_list = PITmap_list[i]
+            # else:
+            #     vectormap_list = MIAmap_list[i]
 
             polyline_list.append(self.traj_subgraphnet(trajectory_batch[i, :self.cfg['last_observe']]).unsqueeze(0)) # 将轨迹前last_observe个点数据(30,6)放入traj_subgraphnet
-            for vec_map in vectormap_list:
+            
+            # 每个batch里有多个vec_map（轨迹点周围的地图），每个vec_map都是(18,8)
+            for vec_map in vectormap_batch[i]:
                 vec_map = vec_map.to(device=self.cfg['device'], dtype=torch.float)
-                map_feature = self.map_subgraphnet(vec_map)  # vector map 放入 map_subgraphnet
+                map_feature = self.map_subgraphnet(vec_map) 
                 polyline_list.append(map_feature.unsqueeze(0))
+    
+            # for vec_map in vectormap_list:
+            #     vec_map = vec_map.to(device=self.cfg['device'], dtype=torch.float)
+            #     map_feature = self.map_subgraphnet(vec_map)  # vector map 放入 map_subgraphnet
+            #     polyline_list.append(map_feature.unsqueeze(0))
             polyline_feature = F.normalize(torch.cat(polyline_list, dim=0), p=2, dim=1)  # L2 Normalize
             out = self.graphnet(polyline_feature)
             decoded_data_perstep = self.fc2(F.relu(self.layer_norm(self.fc(out[0].unsqueeze(0))))).view(1, -1, 2)  # corresponding one

@@ -30,12 +30,13 @@ def main():
     learning_rate = 1e-3
     learning_rate_decay = 0.3
     cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay,
-               last_observe=30, epochs=1, print_every=10, save_every=2, batch_size=2,
-               data_locate="/home/tangx2/storage/projects/git/argoverse-api/train/data_5000", save_path="./model_ckpt/", # /workspace/argoverse-api/train/data 
+               last_observe=30, epochs=10, print_every=10, save_every=2, batch_size=1,
+               data_locate="/home/tangx2/storage/projects/git/argoverse-api/train/data", save_path="./model_ckpt/", # /workspace/argoverse-api/train/data 
                log_file="./log.txt", tensorboard_path="runs/train_visualization")
 
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(cfg)
+    print('RUN_PARALLEL = ' + str(RUN_PARALLEL))
     print()
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -75,7 +76,6 @@ def do_train(model, cfg, train_loader, optimizer, scheduler, writer, logger):
             if i % print_every == 0:
                 logger.info('Epoch %d/%d: Iteration %d, loss = %.4f' % (e+1, cfg['epochs'], i, loss.item()))
                 writer.add_scalar('training_loss', loss.item(), e)
-            break
         # scheduler.step()
         if (e+1) % cfg['save_every'] == 0:
             file_path = cfg['save_path'] + "model_epoch" + str(e+1) + ".pth"
