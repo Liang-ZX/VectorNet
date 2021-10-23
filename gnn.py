@@ -22,11 +22,11 @@ class GraphAttentionNet(nn.Module):
         nn.init.kaiming_normal_(self.valueFC.weight)
 
     def forward(self, polyline_feature):
-        p_query = F.relu(self.queryFC(polyline_feature))
+        p_query = F.relu(self.queryFC(polyline_feature))   # (N,128)
         p_key = F.relu(self.keyFC(polyline_feature))
         p_value = F.relu(self.valueFC(polyline_feature))
-        query_result = p_query.mm(p_key.t())    # 矩阵乘
+        query_result = p_query.mm(p_key.t())    # 矩阵乘 (N,N)
         query_result = query_result / (p_key.shape[1] ** 0.5)
         attention = F.softmax(query_result, dim=1)
-        output = attention.mm(p_value)
+        output = attention.mm(p_value) # (N,128)
         return output + p_query

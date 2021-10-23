@@ -5,6 +5,7 @@ from argoverse.visualization.visualize_sequences import viz_sequence
 from argoverse.map_representation.map_api import ArgoverseMap
 import matplotlib.pyplot as plt
 import os
+import numpy as np
 
 ##set root_dir to the correct path to your dataset folder
 root_dir = '/home/tangx2/storage/projects/git/argoverse-api/train/data_10/'
@@ -68,14 +69,14 @@ for key in lane_ids:
     avm.draw_lane(key, city_name)
 
 ''' draw traj and lane in one image '''
-for id in lane_ids:
-	pts = avm.get_lane_segment_polygon(id, city_name)
-	pts = pts[:,:2]
-	x1 = pts[:,0]
-	y1 = pts[:,1]
-	plt.plot(x1, y1)
-for i in range(len(agent_obs_traj) - 1):
-	plt.annotate('', xy=(agent_obs_traj[i+1][0],agent_obs_traj[i+1][1]),xytext=(agent_obs_traj[i][0],agent_obs_traj[i][1]),arrowprops=dict(arrowstyle="->",connectionstyle="arc3"))
+# for id in lane_ids:
+# 	pts = avm.get_lane_segment_polygon(id, city_name)
+# 	pts = pts[:,:2]
+# 	x1 = pts[:,0]
+# 	y1 = pts[:,1]
+# 	plt.plot(x1, y1)
+# for i in range(len(agent_obs_traj) - 1):
+# 	plt.annotate('', xy=(agent_obs_traj[i+1][0],agent_obs_traj[i+1][1]),xytext=(agent_obs_traj[i][0],agent_obs_traj[i][1]),arrowprops=dict(arrowstyle="->",connectionstyle="arc3"))
 
 
-plt.show()
+# plt.show()
