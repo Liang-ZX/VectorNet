@@ -1,0 +1,9 @@
+data
+data/*
+log*
+pretrained_model/*
+runs/*
+__pycache__/*
+model_ckpt/*
+.ipynb_checkpoints/*
+
