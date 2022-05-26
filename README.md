@@ -2,6 +2,8 @@
 
 This is the unofficial **pytorch** implementation of CVPR2020 paper *"VectorNet: Encoding HD Maps and Agent Dynamics from Vectorized Representation"*. (And it's a part of test of the summer camp 2020 organized by IIIS, Tsinghua University.)
 
+https://eval.ai/challenge/454/overview
+
 1. 运行环境
 
    python 3.7, Pytorch1.1.0, torchvision0.3.0, cuda9.0 
